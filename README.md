@@ -38,8 +38,8 @@ This repository provides a machine learning-based bankruptcy prediction tool for
 
 ### Prerequisites
 
-- Install required Python libraries from `requirements.txt`.
-- Compatible with Python 3.8 or higher.
+- Install required Python libraries.
+- Compatible with Python 3.12
 
 ### Running the Project
 
