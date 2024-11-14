@@ -10,7 +10,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 from reportlab.lib.colors import HexColor
 
-api_Key = "AIzaSyCY3nNQFfchRtlfOCYxn_XNEVUferKifsI"
+api_Key = "Enter Your Gemini API Key Here"
 
 
 def create_custom_styles():
