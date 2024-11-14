@@ -1,86 +1,105 @@
+import gradio as gr
+import pandas as pd
+import numpy as np
+import pickle
+import shap
+from reportlab.lib.pagesizes import letter
+import re
+import requests
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from reportlab.lib.colors import HexColor
+
+api_Key = "Enter Your Gemini API Key Here"
 
 
 def create_custom_styles():
     # Previous styles code remains the same
     styles = getSampleStyleSheet()
-    
+
     # Title style
     title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
+        "CustomTitle",
+        parent=styles["Heading1"],
         fontSize=24,
         spaceAfter=30,
-        textColor=HexColor('#1a237e')
+        textColor=HexColor("#1a237e"),
     )
-    
+
     # Heading style
     heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
+        "CustomHeading",
+        parent=styles["Heading2"],
         fontSize=16,
         spaceAfter=12,
         spaceBefore=16,
-        textColor=HexColor('#303f9f')
+        textColor=HexColor("#303f9f"),
     )
-    
+
     # Normal text style
     normal_style = ParagraphStyle(
-        'CustomNormal',
-        parent=styles['Normal'],
+        "CustomNormal",
+        parent=styles["Normal"],
         fontSize=12,
         spaceBefore=6,
         spaceAfter=6,
-        leading=14
+        leading=14,
     )
-    
+
     # Status style
     status_style = ParagraphStyle(
-        'StatusStyle',
-        parent=styles['Normal'],
+        "StatusStyle",
+        parent=styles["Normal"],
         fontSize=14,
         spaceBefore=12,
         spaceAfter=12,
-        textColor=HexColor('#1b5e20'),
+        textColor=HexColor("#1b5e20"),
         borderWidth=1,
-        borderColor=HexColor('#1b5e20'),
+        borderColor=HexColor("#1b5e20"),
         borderPadding=8,
-        borderRadius=8
+        borderRadius=8,
     )
-    
+
     # Bullet point style with bold option
     bullet_style = ParagraphStyle(
-        'BulletStyle',
-        parent=normal_style,
-        leftIndent=20,
-        firstLineIndent=0
+        "BulletStyle", parent=normal_style, leftIndent=20, firstLineIndent=0
     )
-    
+
     return {
-        'title': title_style,
-        'heading': heading_style,
-        'normal': normal_style,
-        'status': status_style,
-        'bullet': bullet_style
+        "title": title_style,
+        "heading": heading_style,
+        "normal": normal_style,
+        "status": status_style,
+        "bullet": bullet_style,
     }
+
 
 def process_markdown_text(text):
     """
     Process markdown-style formatting in text
     """
     # Convert markdown to ReportLab's paragraph markup
-    
+
     # Handle bold text with double asterisks
-    text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
-    
+    text = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", text)
+
     # Handle single asterisk for italic
-    text = re.sub(r'\*(.*?)\*', r'<i>\1</i>', text)
-    
+    text = re.sub(r"\*(.*?)\*", r"<i>\1</i>", text)
+
     # Handle bullet points with asterisk or hyphen
-    text = re.sub(r'^\s*[\*\-]\s+', '&bull;&nbsp;', text)
-    
+    text = re.sub(r"^\s*[\*\-]\s+", "&bull;&nbsp;", text)
+
     return text
 
-def generate_pdf_report(company, year, predicted_status, shap_summary_df, filename="Output/BankruptcyReport.pdf", top_n=5):
+
+def generate_pdf_report(
+    company,
+    year,
+    predicted_status,
+    shap_summary_df,
+    filename="Output/BankruptcyReport.pdf",
+    top_n=5,
+):
     """
     Generate a professionally formatted PDF report for bankruptcy prediction with proper markdown support.
     """
@@ -93,89 +112,76 @@ def generate_pdf_report(company, year, predicted_status, shap_summary_df, filena
         topMargin=72,
         bottomMargin=72,
         title="FinGuard",
-        author=""  # Replace this with a relevant name
+        author="",  # Replace this with a relevant name
     )
 
-    
     # Get custom styles
     styles = create_custom_styles()
-    
+
     # Prepare the story (content) for the PDF
     story = []
-    
+
     # Add title
-    story.append(Paragraph("Bankruptcy Prediction Report", styles['title']))
+    story.append(Paragraph("Bankruptcy Prediction Report", styles["title"]))
     story.append(Spacer(1, 20))
-    
+
     # Add prediction status with special formatting
     status_text = f"Predicted Status: {predicted_status}"
-    story.append(Paragraph(status_text, styles['status']))
+    story.append(Paragraph(status_text, styles["status"]))
     story.append(Spacer(1, 20))
-    
+
     # Prepare top features for Gemini API
-    top_features = shap_summary_df[['Feature', 'SHAP Value']].head(top_n).values.tolist()
-    
+    top_features = (
+        shap_summary_df[["Feature", "SHAP Value"]].head(top_n).values.tolist()
+    )
+
     # Get generated content from Gemini
     generated_text = call_gemini_api(company, year, predicted_status, top_features)
-    
+
     # Split text into sections while preserving empty lines
     sections = generated_text.splitlines()
-    
+
     # Process the generated text and add it to the story
     in_bullet_list = False
-    
+
     for section in sections:
         # Skip empty lines but add a small space
         if not section.strip():
             story.append(Spacer(1, 6))
             continue
-            
+
         # Process the section text for markdown
         processed_text = process_markdown_text(section.strip())
-        
+
         # Handle different section types
-        if '###' in section or '##' in section:
+        if "###" in section or "##" in section:
             # Section heading - remove the ### or ## markers and any extra spaces
-            heading_text = re.sub(r'^#{2,3}\s*', '', section).strip()
+            heading_text = re.sub(r"^#{2,3}\s*", "", section).strip()
             story.append(Spacer(1, 12))  # Add space before heading
-            story.append(Paragraph(heading_text, styles['heading']))
-            story.append(Spacer(1, 6))   # Add space after heading
+            story.append(Paragraph(heading_text, styles["heading"]))
+            story.append(Spacer(1, 6))  # Add space after heading
             in_bullet_list = False
-            
-        elif section.strip().startswith(('*', '-')) or '**X' in section:
+
+        elif section.strip().startswith(("*", "-")) or "**X" in section:
             # Bullet points or financial ratios
             if not in_bullet_list:
                 story.append(Spacer(1, 6))
                 in_bullet_list = True
-            story.append(Paragraph(processed_text, styles['bullet']))
-            
+            story.append(Paragraph(processed_text, styles["bullet"]))
+
         else:
             # Normal paragraph text
             in_bullet_list = False
-            if section.startswith('**') and section.endswith('**'):
+            if section.startswith("**") and section.endswith("**"):
                 # Metadata lines (company, date) or bold text
-                story.append(Paragraph(processed_text, styles['normal']))
+                story.append(Paragraph(processed_text, styles["normal"]))
             else:
-                story.append(Paragraph(processed_text, styles['normal']))
+                story.append(Paragraph(processed_text, styles["normal"]))
             story.append(Spacer(1, 6))
-    
+
     # Build the PDF
     doc.build(story)
 
-
-
-import gradio as gr
-import pandas as pd
-import numpy as np
-import pickle
-import shap
-from reportlab.lib.pagesizes import letter
-import re
-import requests
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
-from reportlab.lib.colors import HexColor
-api_Key = "AIzaSyBb1E1_JfMbQ61jfpOu4nsF6CJ8_8gxqSQ"
 
 # Load models and training data (keeping existing code)
 with open("Output/voting_classifier_model.pkl", "rb") as f:
@@ -259,7 +265,6 @@ feature_names = [
 ]
 
 
-
 # Keep all your original functions exactly the same
 def predict_company_status(company, year, *features):
     # Your original prediction function remains unchanged
@@ -296,12 +301,16 @@ def predict_company_status(company, year, *features):
 
     return predicted_status
 
+
 # Keep all other original functions unchanged
 def call_gemini_api(company, year, predicted_status, top_features):
     global api_Key
-    api_url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key='+api_Key
-    headers = {'Content-Type': 'application/json'}
-    
+    api_url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key="
+        + api_Key
+    )
+    headers = {"Content-Type": "application/json"}
+
     input_text = f"""
 Generate a bankruptcy report in the following structured format:
     
@@ -325,34 +334,30 @@ Based on the predicted status, provide detailed recommendations. Recommendations
 ### Disclaimer
 End with a standard disclaimer stating that the report is based on model predictions and should be used as a tool for analysis, not as financial advice.
     """
-    
-    data = {
-        "contents": [{"parts": [{"text": input_text}]}]
-    }
-    
+
+    data = {"contents": [{"parts": [{"text": input_text}]}]}
+
     response = requests.post(api_url, headers=headers, json=data)
-    
+
     if response.status_code != 200:
         print(f"Error: Received status code {response.status_code}")
         print("Response text:", response.text)
         return "Error in response from Gemini API."
-    
+
     response_json = response.json()
-    
+
     try:
-        generated_text = response_json['candidates'][0]['content']['parts'][0]['text']
+        generated_text = response_json["candidates"][0]["content"]["parts"][0]["text"]
     except KeyError:
         print("Error: Unexpected response format from Gemini API.")
         generated_text = "The Gemini API failed to generate a response."
-    
+
     return generated_text
 
 
 with gr.Blocks(
     theme=gr.themes.Base(
-        primary_hue="blue",
-        secondary_hue="gray",
-        font=gr.themes.GoogleFont("Inter")
+        primary_hue="blue", secondary_hue="gray", font=gr.themes.GoogleFont("Inter")
     )
 ) as app:
     gr.Markdown(
@@ -371,54 +376,61 @@ with gr.Blocks(
     with gr.Tabs():
         with gr.TabItem("Liquidity & Working Capital (1-13)"):
             inputs_1_13 = [
-                gr.Slider(0.0, 10.0, value=0.5, label=feature_names[i], info="Enter value")
+                gr.Slider(
+                    0.0, 10.0, value=0.5, label=feature_names[i], info="Enter value"
+                )
                 for i in range(13)
             ]
-        
+
         with gr.TabItem("Profitability & Asset Management (14-26)"):
             inputs_14_26 = [
-                gr.Slider(0.0, 10.0, value=0.5, label=feature_names[i], info="Enter value")
+                gr.Slider(
+                    0.0, 10.0, value=0.5, label=feature_names[i], info="Enter value"
+                )
                 for i in range(13, 26)
             ]
-        
+
         with gr.TabItem("Leverage & Capital Structure (27-39)"):
             inputs_27_39 = [
-                gr.Slider(0.0, 10.0, value=0.5, label=feature_names[i], info="Enter value")
+                gr.Slider(
+                    0.0, 10.0, value=0.5, label=feature_names[i], info="Enter value"
+                )
                 for i in range(26, 39)
             ]
-        
+
         with gr.TabItem("Operational Efficiency (40-52)"):
             inputs_40_52 = [
-                gr.Slider(0.0, 10.0, value=0.5, label=feature_names[i], info="Enter value")
+                gr.Slider(
+                    0.0, 10.0, value=0.5, label=feature_names[i], info="Enter value"
+                )
                 for i in range(39, 52)
             ]
-        
+
         with gr.TabItem("Market & Economic Indicators (53-66)"):
             inputs_53_66 = [
-                gr.Slider(0.0, 10.0, value=0.5, label=feature_names[i], info="Enter value")
+                gr.Slider(
+                    0.0, 10.0, value=0.5, label=feature_names[i], info="Enter value"
+                )
                 for i in range(52, 66)
             ]
 
     with gr.Row():
         with gr.Column():
-            predict_btn = gr.Button(
-                "Generate Prediction",
-                variant="primary",
-                scale=2
-            )
+            predict_btn = gr.Button("Generate Prediction", variant="primary", scale=2)
 
     with gr.Row():
-        output_status = gr.Textbox(
-            label="Predicted Company Status",
-            interactive=False
-        )
-        output_file = gr.File(
-            label="Download Detailed Report",
-            interactive=False
-        )
+        output_status = gr.Textbox(label="Predicted Company Status", interactive=False)
+        output_file = gr.File(label="Download Detailed Report", interactive=False)
 
     # Combine company name, year input, and all feature sliders in the correct order
-    all_inputs = [company_input, year_input] + inputs_1_13 + inputs_14_26 + inputs_27_39 + inputs_40_52 + inputs_53_66
+    all_inputs = (
+        [company_input, year_input]
+        + inputs_1_13
+        + inputs_14_26
+        + inputs_27_39
+        + inputs_40_52
+        + inputs_53_66
+    )
 
     # Keep your original prediction function call
     predict_btn.click(
@@ -445,9 +457,6 @@ with gr.Blocks(
         - Recommendations based on the analysis
         """
     )
-
-
-
 
 # Launch the app with your original settings
 if __name__ == "__main__":
